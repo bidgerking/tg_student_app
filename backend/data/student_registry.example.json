@@ -1,0 +1,16 @@
+[
+  {
+    "personalNumberHash": "GENERATE_WITH_tools/hash_registry.py",
+    "name": "Иванов Иван Иванович",
+    "faculty": "ФКСиС",
+    "facultyId": 20026,
+    "speciality": "Информатика и технологии программирования",
+    "specialityId": 20021,
+    "course": 3,
+    "group": "053503",
+    "subgroup": 1,
+    "educationForm": "очная",
+    "status": "active"
+  }
+]
+
