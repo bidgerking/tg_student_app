@@ -59,7 +59,9 @@ async def telegram_auth(payload: TelegramAuthRequest) -> dict:
     try:
         tg_user = validate_telegram_init_data(payload.init_data, settings.bot_token, settings.telegram_init_data_max_age)
     except ValueError as exc:
-        raise HTTPException(401, str(exc)) from exc
+        if not settings.dev_auth_enabled or payload.init_data != "dev-test-init-data":
+            raise HTTPException(401, str(exc)) from exc
+        tg_user = type("DevTelegramUser", (), {"telegram_id": settings.dev_telegram_id, "username": "bsuir_test_user", "first_name": "Тестовый", "last_name": "Студент"})()
     user_id = await db.upsert_user(tg_user.telegram_id, tg_user.username, tg_user.first_name)
     token = new_session_token()
     await db.save_session(hashlib.sha256(token.encode()).hexdigest(), user_id, (datetime.now(timezone.utc) + timedelta(days=7)).isoformat())
@@ -91,7 +93,21 @@ async def confirm_student(payload: ConfirmVerificationRequest, user_id: int = De
     candidate = await db.consume_pending(hashlib.sha256(payload.verification_token.encode()).hexdigest(), user_id)
     if not candidate:
         raise HTTPException(400, "Данные проверки истекли. Проверьте личный номер ещё раз.")
-    await db.save_profile(user_id, candidate)
+    profile_data = {
+        "personal_number_hash": candidate["personal_number_hash"],
+        "faculty_id": candidate.get("facultyId"),
+        "faculty_name": candidate.get("faculty", ""),
+        "speciality_id": candidate.get("specialityId"),
+        "speciality_name": candidate.get("speciality", ""),
+        "course": candidate.get("course"),
+        "group_number": candidate["group"],
+        "subgroup": candidate.get("subgroup"),
+        "education_form": candidate.get("educationForm"),
+        "student_status": candidate.get("status", "active"),
+        "verified_at": candidate["verified_at"],
+        "name": candidate.get("name", ""),
+    }
+    await db.save_profile(user_id, profile_data)
     return {"profile": public_profile(await db.get_profile(user_id))}
 
 

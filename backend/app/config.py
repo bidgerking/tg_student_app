@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://localhost:8080"
     timezone: str = "Europe/Minsk"
     web_app_url: str = ""
+    dev_auth_enabled: bool = False
+    dev_telegram_id: int = 999000001
 
     @property
     def cors_origin_list(self) -> list[str]:

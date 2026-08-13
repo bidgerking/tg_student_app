@@ -29,6 +29,7 @@ class Database:
                 CREATE TABLE IF NOT EXISTS student_profiles (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+                    name TEXT NOT NULL DEFAULT '',
                     personal_number_hash TEXT NOT NULL,
                     faculty_id INTEGER,
                     faculty_name TEXT NOT NULL,
@@ -69,6 +70,10 @@ class Database:
                 );
                 """
             )
+            cursor = await db.execute("PRAGMA table_info(student_profiles)")
+            columns = {row[1] for row in await cursor.fetchall()}
+            if "name" not in columns:
+                await db.execute("ALTER TABLE student_profiles ADD COLUMN name TEXT NOT NULL DEFAULT ''")
             await db.commit()
 
     async def upsert_user(self, telegram_id: int, username: str | None, first_name: str) -> int:
@@ -112,17 +117,18 @@ class Database:
         async with aiosqlite.connect(self.path) as db:
             await db.execute(
                 """INSERT INTO student_profiles
-                (user_id, personal_number_hash, faculty_id, faculty_name, speciality_id,
+                (user_id, name, personal_number_hash, faculty_id, faculty_name, speciality_id,
                 speciality_name, course, group_number, subgroup, education_form,
                 student_status, verified_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(user_id) DO UPDATE SET personal_number_hash=excluded.personal_number_hash,
+                name=excluded.name,
                 faculty_id=excluded.faculty_id, faculty_name=excluded.faculty_name,
                 speciality_id=excluded.speciality_id, speciality_name=excluded.speciality_name,
                 course=excluded.course, group_number=excluded.group_number, subgroup=excluded.subgroup,
                 education_form=excluded.education_form, student_status=excluded.student_status,
                 verified_at=excluded.verified_at""",
-                (user_id, data["personal_number_hash"], data.get("faculty_id"), data["faculty_name"],
+                (user_id, data.get("name", ""), data["personal_number_hash"], data.get("faculty_id"), data["faculty_name"],
                  data.get("speciality_id"), data["speciality_name"], data.get("course"), data["group_number"],
                  data.get("subgroup"), data.get("education_form"), data["student_status"], data["verified_at"]),
             )
@@ -173,4 +179,3 @@ class Database:
         async with aiosqlite.connect(self.path) as db:
             await db.execute("DELETE FROM student_profiles WHERE user_id = ?", (user_id,))
             await db.commit()
-

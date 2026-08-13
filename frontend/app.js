@@ -4,7 +4,7 @@
   tg?.ready(); tg?.expand(); tg?.setHeaderColor?.("#003366"); tg?.setBackgroundColor?.("#F2F4F7");
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
-const apiBase = window.location.hostname === "localhost" ? "http://localhost:8000" : "https://prepared-charged-competing-mel.trycloudflare.com";
+  const apiBase = window.location.hostname === "localhost" ? "http://localhost:8000" : "https://prepared-charged-competing-mel.trycloudflare.com";
   const state = { token: localStorage.getItem("bsuir_access_token"), profile: null, candidate: null, verificationToken: null, view: "today" };
   const screens = ["verificationScreen", "confirmScreen", "dashboardScreen"];
   const show = (id) => screens.forEach((screen) => document.getElementById(screen).classList.toggle("hidden", screen !== id));
