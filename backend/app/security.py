@@ -8,6 +8,12 @@ import time
 from dataclasses import dataclass
 from urllib.parse import parse_qsl
 
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError, VerifyMismatchError
+
+
+PASSWORD_HASHER = PasswordHasher()
+
 
 @dataclass(frozen=True)
 class TelegramUser:
@@ -52,8 +58,28 @@ def new_session_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+def hash_password(password: str) -> str:
+    return PASSWORD_HASHER.hash(password)
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    try:
+        return PASSWORD_HASHER.verify(password_hash, password)
+    except (InvalidHashError, VerificationError, VerifyMismatchError):
+        return False
+
+
+def validate_password(password: str, personal_number: str) -> str | None:
+    if len(password) < 10:
+        return "Пароль должен содержать минимум 10 символов."
+    if password != password.strip():
+        return "Пароль не должен начинаться или заканчиваться пробелом."
+    if personal_number and personal_number.casefold() in password.casefold():
+        return "Пароль не должен совпадать с личным номером."
+    return None
+
+
 def hash_personal_number(personal_number: str, pepper: str) -> str:
     """Hash a personal number; the clear value never reaches logs or storage."""
     normalized = "".join(character for character in personal_number if character.isalnum()).upper()
     return hashlib.sha256(f"{pepper}:{normalized}".encode()).hexdigest()
-

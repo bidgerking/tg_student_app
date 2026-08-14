@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     web_app_url: str = ""
     dev_auth_enabled: bool = False
     dev_telegram_id: int = 999000001
+    session_short_minutes: int = 120
+    session_remember_days: int = 30
+    login_attempts_per_hour: int = 5
+    admin_registry_token: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:

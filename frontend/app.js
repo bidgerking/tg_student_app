@@ -4,12 +4,25 @@
   tg?.ready(); tg?.expand(); tg?.setHeaderColor?.("#003366"); tg?.setBackgroundColor?.("#F2F4F7");
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
-  const apiBase = window.location.hostname === "localhost" ? "http://localhost:8000" : "https://prepared-charged-competing-mel.trycloudflare.com";
+  const configuredApiBase = window.__BSUIR_API_BASE__ || document.querySelector('meta[name="bsuir-api-base"]')?.content || "";
+  const apiBase = configuredApiBase.replace(/\/$/, "") || (location.protocol === "file:" ? "http://127.0.0.1:8000" : "");
   const state = { token: localStorage.getItem("bsuir_access_token"), profile: null, candidate: null, verificationToken: null, view: "today" };
   const screens = ["verificationScreen", "confirmScreen", "dashboardScreen"];
   const show = (id) => screens.forEach((screen) => document.getElementById(screen).classList.toggle("hidden", screen !== id));
   const toast = (message) => { const node = $("#toast"); node.textContent = message; node.classList.add("is-visible"); clearTimeout(window.__toastTimer); window.__toastTimer = setTimeout(() => node.classList.remove("is-visible"), 3600); };
-  const fetchApi = async (path, options = {}) => { const headers = { "Content-Type": "application/json", ...(options.headers || {}) }; if (state.token) headers.Authorization = `Bearer ${state.token}`; const response = await fetch(`${apiBase}${path}`, { ...options, headers }); const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.detail || data.error || "Не удалось выполнить запрос"); return data; };
+  const fetchApi = async (path, options = {}) => {
+    const headers = { "Content-Type": "application/json", ...(options.headers || {}) };
+    if (state.token) headers.Authorization = `Bearer ${state.token}`;
+    try {
+      const response = await fetch(`${apiBase}${path}`, { ...options, headers });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.detail || data.error || `Сервер вернул HTTP ${response.status}`);
+      return data;
+    } catch (error) {
+      if (error instanceof TypeError) throw new Error(`Не удаётся подключиться к API (${apiBase || "текущий адрес"}). Проверьте backend и HTTPS-туннель.`);
+      throw error;
+    }
+  };
   const formatDate = (value) => new Intl.DateTimeFormat("ru-RU", { weekday:"long", day:"numeric", month:"long" }).format(new Date(`${value}T12:00:00`));
   const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#039;" }[char]));
   const initials = (name) => name.split(/\s+/).filter(Boolean).slice(0,2).map((part) => part[0]).join("").toUpperCase();
@@ -25,5 +38,5 @@
   $("#verifyForm").addEventListener("submit", async (event) => { event.preventDefault(); $("#verifyError").textContent = ""; const button = $("#verifyButton"); button.disabled = true; button.textContent = "Проверяем…"; try { const data = await fetchApi("/api/app/student/verify", { method:"POST", body: JSON.stringify({ personalNumber: $("#personalNumber").value.trim() }) }); if (!data.verified) throw new Error(data.error); state.candidate = data.student; state.verificationToken = data.verificationToken; renderCandidate(data.student); show("confirmScreen"); } catch (error) { $("#verifyError").textContent = error.message; } finally { button.disabled = false; button.innerHTML = "Проверить <b>↗</b>"; } });
   $("#confirmButton").addEventListener("click", async () => { try { const data = await fetchApi("/api/app/student/confirm", { method:"POST", body: JSON.stringify({ verificationToken: state.verificationToken }) }); state.profile = data.profile; renderProfileSummary(state.profile); show("dashboardScreen"); await loadView("today"); } catch (error) { toast(error.message); } });
   $$(".back-button").forEach((button) => button.addEventListener("click", () => show(button.dataset.screen))); $$(".tab").forEach((tab) => tab.addEventListener("click", () => loadView(tab.dataset.view))); $("#refreshButton").addEventListener("click", () => loadView(state.view)); $("#profileTopButton").addEventListener("click", () => state.profile && loadView("profile"));
-  window.addEventListener("load", async () => { const initData = tg?.initData || (location.hostname === "localhost" || location.hostname === "127.0.0.1" ? "dev-test-init-data" : ""); if (initData && !state.token) { try { const data = await fetchApi("/api/app/telegram/auth", { method:"POST", body:JSON.stringify({ initData }) }); state.token = data.accessToken; localStorage.setItem("bsuir_access_token", state.token); if (data.profile) state.profile = data.profile; } catch (error) { $("#verifyError").textContent = error.message; } } await bootstrap(); });
+  window.addEventListener("load", async () => { const initData = tg?.initData || (location.hostname === "localhost" || location.hostname === "127.0.0.1" ? "dev-test-init-data" : ""); if (initData) { localStorage.removeItem("bsuir_access_token"); state.token = null; try { const data = await fetchApi("/api/app/telegram/auth", { method:"POST", body:JSON.stringify({ initData }) }); state.token = data.accessToken; localStorage.setItem("bsuir_access_token", state.token); if (data.profile) state.profile = data.profile; } catch (error) { $("#verifyError").textContent = error.message; } } await bootstrap(); });
 })();

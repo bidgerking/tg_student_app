@@ -60,7 +60,17 @@ class Database:
                 CREATE TABLE IF NOT EXISTS sessions (
                     token_hash TEXT PRIMARY KEY,
                     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                    expires_at TEXT NOT NULL
+                    expires_at TEXT NOT NULL,
+                    remember_me INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT '',
+                    last_used_at TEXT NOT NULL DEFAULT ''
+                );
+                CREATE TABLE IF NOT EXISTS account_credentials (
+                    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                    personal_number_hash TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    last_login_at TEXT
                 );
                 CREATE TABLE IF NOT EXISTS pending_verifications (
                     token_hash TEXT PRIMARY KEY,
@@ -74,6 +84,14 @@ class Database:
             columns = {row[1] for row in await cursor.fetchall()}
             if "name" not in columns:
                 await db.execute("ALTER TABLE student_profiles ADD COLUMN name TEXT NOT NULL DEFAULT ''")
+            cursor = await db.execute("PRAGMA table_info(sessions)")
+            session_columns = {row[1] for row in await cursor.fetchall()}
+            if "remember_me" not in session_columns:
+                await db.execute("ALTER TABLE sessions ADD COLUMN remember_me INTEGER NOT NULL DEFAULT 0")
+            if "created_at" not in session_columns:
+                await db.execute("ALTER TABLE sessions ADD COLUMN created_at TEXT NOT NULL DEFAULT ''")
+            if "last_used_at" not in session_columns:
+                await db.execute("ALTER TABLE sessions ADD COLUMN last_used_at TEXT NOT NULL DEFAULT ''")
             await db.commit()
 
     async def upsert_user(self, telegram_id: int, username: str | None, first_name: str) -> int:
@@ -91,18 +109,96 @@ class Database:
             await db.commit()
         return int(row[0])
 
-    async def save_session(self, token_hash: str, user_id: int, expires_at: str) -> None:
+    async def save_session(self, token_hash: str, user_id: int, expires_at: str, remember_me: bool = False) -> None:
+        now = datetime.now(timezone.utc).isoformat()
         async with aiosqlite.connect(self.path) as db:
-            await db.execute("INSERT INTO sessions VALUES (?, ?, ?)", (token_hash, user_id, expires_at))
+            await db.execute(
+                "INSERT INTO sessions (token_hash, user_id, expires_at, remember_me, created_at, last_used_at) VALUES (?, ?, ?, ?, ?, ?)",
+                (token_hash, user_id, expires_at, int(remember_me), now, now),
+            )
             await db.commit()
 
     async def get_user_id_by_session(self, token_hash: str) -> int | None:
         async with aiosqlite.connect(self.path) as db:
             cursor = await db.execute("SELECT user_id, expires_at FROM sessions WHERE token_hash = ?", (token_hash,))
             row = await cursor.fetchone()
+            if row:
+                await db.execute("UPDATE sessions SET last_used_at = ? WHERE token_hash = ?", (datetime.now(timezone.utc).isoformat(), token_hash))
+                await db.commit()
         if not row or datetime.fromisoformat(row[1]) <= datetime.now(timezone.utc):
             return None
         return int(row[0])
+
+    async def get_session(self, token_hash: str) -> dict[str, Any] | None:
+        async with aiosqlite.connect(self.path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM sessions WHERE token_hash = ?", (token_hash,))
+            row = await cursor.fetchone()
+        if not row or datetime.fromisoformat(row["expires_at"]) <= datetime.now(timezone.utc):
+            return None
+        return dict(row)
+
+    async def delete_session(self, token_hash: str) -> None:
+        async with aiosqlite.connect(self.path) as db:
+            await db.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash,))
+            await db.commit()
+
+    async def delete_user_sessions(self, user_id: int) -> None:
+        async with aiosqlite.connect(self.path) as db:
+            await db.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+            await db.commit()
+
+    async def get_credentials_by_personal_hash(self, personal_number_hash: str) -> dict[str, Any] | None:
+        async with aiosqlite.connect(self.path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM account_credentials WHERE personal_number_hash = ?", (personal_number_hash,))
+            row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def get_credentials(self, user_id: int) -> dict[str, Any] | None:
+        async with aiosqlite.connect(self.path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM account_credentials WHERE user_id = ?", (user_id,))
+            row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def create_account(self, user_id: int, profile: dict[str, Any], password_hash: str) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(self.path) as db:
+            await db.execute("BEGIN")
+            await db.execute(
+                """INSERT INTO account_credentials (user_id, personal_number_hash, password_hash, created_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET personal_number_hash=excluded.personal_number_hash,
+                password_hash=excluded.password_hash""",
+                (user_id, profile["personal_number_hash"], password_hash, now),
+            )
+            await db.execute(
+                """INSERT INTO student_profiles
+                (user_id, name, personal_number_hash, faculty_id, faculty_name, speciality_id,
+                speciality_name, course, group_number, subgroup, education_form, student_status, verified_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET personal_number_hash=excluded.personal_number_hash,
+                name=excluded.name, faculty_id=excluded.faculty_id, faculty_name=excluded.faculty_name,
+                speciality_id=excluded.speciality_id, speciality_name=excluded.speciality_name,
+                course=excluded.course, group_number=excluded.group_number, subgroup=excluded.subgroup,
+                education_form=excluded.education_form, student_status=excluded.student_status,
+                verified_at=excluded.verified_at""",
+                (user_id, profile.get("name", ""), profile["personal_number_hash"], profile.get("faculty_id"), profile["faculty_name"],
+                 profile.get("speciality_id"), profile["speciality_name"], profile.get("course"), profile["group_number"],
+                 profile.get("subgroup"), profile.get("education_form"), profile["student_status"], profile["verified_at"]),
+            )
+            await db.commit()
+
+    async def update_password(self, user_id: int, password_hash: str) -> None:
+        async with aiosqlite.connect(self.path) as db:
+            await db.execute("UPDATE account_credentials SET password_hash = ? WHERE user_id = ?", (password_hash, user_id))
+            await db.commit()
+
+    async def mark_login(self, user_id: int) -> None:
+        async with aiosqlite.connect(self.path) as db:
+            await db.execute("UPDATE account_credentials SET last_login_at = ? WHERE user_id = ?", (datetime.now(timezone.utc).isoformat(), user_id))
+            await db.commit()
 
     async def get_profile(self, user_id: int) -> dict[str, Any] | None:
         async with aiosqlite.connect(self.path) as db:
@@ -178,4 +274,14 @@ class Database:
     async def delete_profile(self, user_id: int) -> None:
         async with aiosqlite.connect(self.path) as db:
             await db.execute("DELETE FROM student_profiles WHERE user_id = ?", (user_id,))
+            await db.commit()
+
+    async def delete_user(self, user_id: int) -> None:
+        async with aiosqlite.connect(self.path) as db:
+            await db.execute("DELETE FROM notifications WHERE user_id = ?", (user_id,))
+            await db.execute("DELETE FROM pending_verifications WHERE user_id = ?", (user_id,))
+            await db.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+            await db.execute("DELETE FROM account_credentials WHERE user_id = ?", (user_id,))
+            await db.execute("DELETE FROM student_profiles WHERE user_id = ?", (user_id,))
+            await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
             await db.commit()

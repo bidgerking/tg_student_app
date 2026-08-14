@@ -4,10 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#003366" />
+    <meta name="bsuir-api-base" content="" />
     <title>BSUIR Student</title>
     <link rel="stylesheet" href="styles.css" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
-    <script src="app.js" defer></script>
+    <script src="runtime-config.js"></script>
+    <script src="app-v3.js?v=20260814-1" defer></script>
   </head>
   <body>
     <div class="app-shell">
@@ -17,6 +19,49 @@
       </header>
 
       <main>
+        <section id="authChoiceScreen" class="screen verification-screen hidden">
+          <div class="section-label">Личный кабинет студента</div>
+          <h1>Войдите в свой<br /><em>личный кабинет.</em></h1>
+          <p class="lead">Telegram подтверждает устройство, а личный номер и пароль защищают аккаунт студента.</p>
+          <div class="auth-actions">
+            <button id="registerModeButton" class="primary-button full-width" type="button">Регистрация <span>↗</span></button>
+            <button id="loginModeButton" class="secondary-button full-width" type="button">Войти в аккаунт</button>
+          </div>
+          <p id="authError" class="error-message" role="alert"></p>
+        </section>
+
+        <section id="registerScreen" class="screen verification-screen hidden">
+          <button class="back-button" data-screen="authChoiceScreen" type="button">← Назад</button>
+          <div class="section-label">Новый аккаунт</div>
+          <h1>Регистрация<br /><em>студента.</em></h1>
+          <form id="registerForm" class="verify-card">
+            <label for="registerPersonalNumber">Личный номер студента</label>
+            <div class="input-wrap"><span>#</span><input id="registerPersonalNumber" inputmode="numeric" autocomplete="off" required /></div>
+            <label for="registerPassword">Пароль</label>
+            <div class="input-wrap"><input id="registerPassword" type="password" autocomplete="new-password" required /></div>
+            <label for="registerPasswordConfirmation">Повторите пароль</label>
+            <div class="input-wrap"><input id="registerPasswordConfirmation" type="password" autocomplete="new-password" required /></div>
+            <p class="form-hint">Минимум 10 символов. Пароль не должен совпадать с личным номером.</p>
+            <button class="primary-button full-width" type="submit">Проверить номер <span>↗</span></button>
+            <p id="registerError" class="error-message" role="alert"></p>
+          </form>
+        </section>
+
+        <section id="loginScreen" class="screen verification-screen hidden">
+          <button class="back-button" data-screen="authChoiceScreen" type="button">← Назад</button>
+          <div class="section-label">Существующий аккаунт</div>
+          <h1>С возвращением<br /><em>в кабинет.</em></h1>
+          <form id="loginForm" class="verify-card">
+            <label for="loginPersonalNumber">Личный номер студента</label>
+            <div class="input-wrap"><span>#</span><input id="loginPersonalNumber" inputmode="numeric" autocomplete="username" required /></div>
+            <label for="loginPassword">Пароль</label>
+            <div class="input-wrap"><input id="loginPassword" type="password" autocomplete="current-password" required /></div>
+            <label class="remember-row"><input id="rememberMe" type="checkbox" /> <span>Запомнить вход на этом устройстве</span></label>
+            <button class="primary-button full-width" type="submit">Войти <span>↗</span></button>
+            <p id="loginError" class="error-message" role="alert"></p>
+          </form>
+        </section>
+
         <section id="verificationScreen" class="screen verification-screen">
           <div class="section-label">Личный кабинет студента</div>
           <h1>Ваше расписание<br /><em>всегда под рукой.</em></h1>

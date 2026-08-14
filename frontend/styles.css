@@ -18,3 +18,15 @@ main { width:min(1120px,calc(100% - 36px)); margin:0 auto; } .screen { min-heigh
 .profile-panel { padding:24px; background:var(--white); border:1px solid var(--line); border-radius:17px; } .profile-panel h2 { margin:0 0 19px; color:var(--navy); font-size:21px; } .profile-panel .data-cell { background:var(--gray); } .profile-panel .data-cell strong { color:var(--graphite); } .profile-panel .data-cell small { color:#75818b; } .danger-button { margin-top:22px; padding:11px 14px; color:#954848; background:#fff0f0; border-radius:9px; font-size:11px; font-weight:800; }
 .toast { position:fixed; z-index:5; right:18px; bottom:18px; max-width:340px; padding:13px 16px; color:var(--white); background:var(--navy); border-left:4px solid var(--blue); border-radius:10px; box-shadow:var(--shadow); opacity:0; transform:translateY(16px); pointer-events:none; transition:opacity var(--ease),transform var(--ease); font-size:12px; } .toast.is-visible { opacity:1; transform:translateY(0); }
 @media (max-width:640px) { main { width:calc(100% - 28px); } .topbar { padding:0 14px; } .topbar-right span:not(.status-dot) { display:none; } .input-wrap { flex-wrap:wrap; } .input-wrap button { width:100%; } .candidate-grid,.profile-fields { grid-template-columns:1fr; } .profile-summary { align-items:flex-start; flex-direction:column; } .summary-course { text-align:left; } .lesson-card { grid-template-columns:77px 1fr; gap:13px; } .lesson-room { grid-column:2; min-width:0; text-align:left; } }
+.auth-actions { display:grid; gap:10px; width:min(100%,420px); }
+.secondary-button { display:inline-flex; align-items:center; justify-content:center; min-height:48px; padding:0 18px; color:var(--blue); background:var(--white); border:1px solid var(--line); border-radius:10px; font-size:12px; font-weight:850; transition:background var(--ease),transform var(--ease); }
+.secondary-button:hover { background:#eaf3fb; transform:translateY(-2px); }
+.verification-screen .verify-card label:not(:first-child) { margin-top:16px; }
+.remember-row { display:flex!important; align-items:center; gap:8px; margin:16px 0!important; color:var(--muted)!important; font-size:12px!important; font-weight:600!important; }
+.remember-row input { width:16px; height:16px; accent-color:var(--blue); }
+.profile-actions { display:flex; flex-wrap:wrap; gap:9px; margin-top:20px; }
+.profile-actions button { margin-top:0; }
+.password-change-form { display:grid; gap:9px; margin-top:24px; padding-top:20px; border-top:1px solid var(--line); }
+.password-change-form label { color:var(--navy); font-size:11px; font-weight:800; }
+.password-change-form input { padding:10px 11px; background:var(--gray); border:1px solid var(--line); border-radius:8px; }
+.password-change-form button { justify-self:start; }
