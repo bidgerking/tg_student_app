@@ -201,6 +201,7 @@ async def verify_candidate(personal_number: str) -> tuple[str, dict] | None:
     candidate = registry.verify(normalized)
     if candidate is None or candidate.get("status", "active") != "active":
         return None
+    candidate.update(await bsuir.group_metadata(candidate["group"]))
     candidate["personal_number_hash"] = hash_personal_number(normalized, settings.student_registry_pepper)
     candidate["verified_at"] = datetime.now(timezone.utc).isoformat()
     return normalized, candidate
@@ -307,6 +308,10 @@ async def login_student(
     credentials = await db.get_credentials_by_personal_hash(number_hash)
     if not credentials or int(credentials["user_id"]) != user_id or not verify_password(payload.password, credentials["password_hash"]):
         raise generic_auth_error()
+    candidate_result = await verify_candidate(payload.personal_number)
+    if candidate_result:
+        _, candidate = candidate_result
+        await db.save_profile(user_id, profile_data_from_candidate(candidate))
     await db.mark_login(user_id)
     token = await issue_session(user_id, payload.remember_me, response, request)
     return {"accessToken": token, "rememberMe": payload.remember_me, "profile": public_profile(await db.get_profile(user_id))}

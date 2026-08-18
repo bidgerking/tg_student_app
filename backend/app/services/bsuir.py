@@ -60,6 +60,39 @@ class BsuirScheduleClient:
         except (httpx.HTTPError, ValueError):
             return None
 
+    @staticmethod
+    def extract_group_metadata(payload: dict[str, Any]) -> dict[str, Any]:
+        """Read student-group details returned alongside the public schedule."""
+        details = payload.get("studentGroupDto") or payload.get("studentGroup") or payload.get("group")
+        if not isinstance(details, dict):
+            return {}
+        aliases = {
+            "faculty": ("facultyName", "faculty"),
+            "facultyId": ("facultyId",),
+            "speciality": ("specialityName", "speciality", "specialtyName", "specialty"),
+            "specialityId": ("specialityId", "specialtyId"),
+            "course": ("course",),
+            "educationForm": ("educationForm", "educationFormName"),
+        }
+        result = {}
+        for target, keys in aliases.items():
+            value = next((details.get(key) for key in keys if details.get(key) not in (None, "")), None)
+            if value is not None:
+                result[target] = value
+        return result
+
+    async def group_metadata(self, group: str) -> dict[str, Any]:
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(f"{self.base_url}/schedule", params={"studentGroup": group})
+                response.raise_for_status()
+                payload = response.json()
+        except (httpx.HTTPError, ValueError):
+            return {}
+        if not isinstance(payload, dict):
+            return {}
+        return self.extract_group_metadata(payload)
+
     async def current_week(self) -> int | None:
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -120,4 +153,3 @@ class BsuirScheduleClient:
                 item["exam"] = True
                 result.append(item)
         return sorted(result, key=lambda item: (item["date"], item["startTime"]))
-

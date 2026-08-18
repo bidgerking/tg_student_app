@@ -13,9 +13,9 @@ from app.security import hash_personal_number
 
 
 TEST_STUDENTS = (
-    ("123456789", "Тестовый Студент", 1),
-    ("123456790", "Тестовый Друг 1", 2),
-    ("123456791", "Тестовый Друг 2", 1),
+    {"personal_number": "123456789", "name": "Тестовый Студент", "group": "624401", "subgroup": 1},
+    {"personal_number": "123456790", "name": "Тестовый Друг 1", "group": "053503", "subgroup": 2},
+    {"personal_number": "123456791", "name": "Тестовый Друг 2", "group": "053503", "subgroup": 1},
 )
 
 
@@ -26,27 +26,25 @@ def main() -> None:
 
     path = Path(settings.student_registry_path)
     records = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
-    known_hashes = {record.get("personalNumberHash") for record in records}
-    for personal_number, name, subgroup in TEST_STUDENTS:
-        number_hash = hash_personal_number(personal_number, settings.student_registry_pepper)
-        if number_hash in known_hashes:
-            continue
-        records.append(
-            {
+    records_by_hash = {record.get("personalNumberHash"): record for record in records}
+    for student in TEST_STUDENTS:
+        number_hash = hash_personal_number(student["personal_number"], settings.student_registry_pepper)
+        record = records_by_hash.get(number_hash)
+        if record is None:
+            record = {
                 "personalNumberHash": number_hash,
-                "name": name,
+                "name": student["name"],
                 "faculty": "ФКСиС",
                 "facultyId": 20026,
                 "speciality": "Информатика и технологии программирования",
                 "specialityId": 20021,
                 "course": 3,
-                "group": "053503",
-                "subgroup": subgroup,
                 "educationForm": "очная",
                 "status": "active",
             }
-        )
-        known_hashes.add(number_hash)
+            records.append(record)
+            records_by_hash[number_hash] = record
+        record.update({"name": student["name"], "group": student["group"], "subgroup": student["subgroup"]})
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(records, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
