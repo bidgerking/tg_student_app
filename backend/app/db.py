@@ -57,6 +57,17 @@ class Database:
                     created_at TEXT NOT NULL,
                     UNIQUE(user_id, type)
                 );
+                CREATE TABLE IF NOT EXISTS friendships (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    friend_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    requested_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'accepted')),
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(user_id, friend_id),
+                    CHECK(user_id < friend_id)
+                );
                 CREATE TABLE IF NOT EXISTS sessions (
                     token_hash TEXT PRIMARY KEY,
                     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -190,11 +201,6 @@ class Database:
             )
             await db.commit()
 
-    async def update_password(self, user_id: int, password_hash: str) -> None:
-        async with aiosqlite.connect(self.path) as db:
-            await db.execute("UPDATE account_credentials SET password_hash = ? WHERE user_id = ?", (password_hash, user_id))
-            await db.commit()
-
     async def mark_login(self, user_id: int) -> None:
         async with aiosqlite.connect(self.path) as db:
             await db.execute("UPDATE account_credentials SET last_login_at = ? WHERE user_id = ?", (datetime.now(timezone.utc).isoformat(), user_id))
@@ -271,17 +277,121 @@ class Database:
                              (user_id, kind, int(enabled), datetime.now(timezone.utc).isoformat()))
             await db.commit()
 
+    @staticmethod
+    def _friend_pair(user_id: int, friend_id: int) -> tuple[int, int]:
+        return (user_id, friend_id) if user_id < friend_id else (friend_id, user_id)
+
+    async def get_profile_by_personal_hash(self, personal_number_hash: str) -> dict[str, Any] | None:
+        async with aiosqlite.connect(self.path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM student_profiles WHERE personal_number_hash = ?", (personal_number_hash,))
+            row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def search_profiles(self, query: str, user_id: int, limit: int = 20) -> list[dict[str, Any]]:
+        pattern = f"%{query.strip()}%"
+        async with aiosqlite.connect(self.path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """SELECT user_id, name, faculty_name, speciality_name, course, group_number, subgroup, student_status
+                   FROM student_profiles
+                   WHERE user_id != ? AND student_status = 'active'
+                     AND (name LIKE ? COLLATE NOCASE OR group_number LIKE ? COLLATE NOCASE)
+                   ORDER BY name COLLATE NOCASE LIMIT ?""",
+                (user_id, pattern, pattern, limit),
+            )
+            rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def get_friendship(self, user_id: int, friend_id: int) -> dict[str, Any] | None:
+        first, second = self._friend_pair(user_id, friend_id)
+        async with aiosqlite.connect(self.path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM friendships WHERE user_id = ? AND friend_id = ?", (first, second))
+            row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def list_friendships(self, user_id: int) -> dict[str, list[dict[str, Any]]]:
+        async with aiosqlite.connect(self.path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """SELECT f.id AS request_id, f.status, f.requested_by, f.created_at,
+                          p.user_id AS student_id, p.name, p.faculty_name, p.speciality_name,
+                          p.course, p.group_number, p.subgroup, p.student_status
+                   FROM friendships f
+                   JOIN student_profiles p ON p.user_id = CASE WHEN f.user_id = ? THEN f.friend_id ELSE f.user_id END
+                   WHERE f.user_id = ? OR f.friend_id = ?
+                   ORDER BY p.name COLLATE NOCASE""",
+                (user_id, user_id, user_id),
+            )
+            rows = [dict(row) for row in await cursor.fetchall()]
+        result = {"friends": [], "incoming": [], "outgoing": []}
+        for row in rows:
+            item = {
+                "requestId": row["request_id"],
+                "userId": row["student_id"],
+                "name": row["name"],
+                "faculty_name": row["faculty_name"],
+                "speciality_name": row["speciality_name"],
+                "course": row["course"],
+                "group_number": row["group_number"],
+                "subgroup": row["subgroup"],
+                "student_status": row["student_status"],
+                "createdAt": row["created_at"],
+            }
+            if row["status"] == "accepted":
+                result["friends"].append(item)
+            elif row["requested_by"] == user_id:
+                result["outgoing"].append(item)
+            else:
+                result["incoming"].append(item)
+        return result
+
+    async def create_friend_request(self, user_id: int, friend_id: int) -> dict[str, Any]:
+        first, second = self._friend_pair(user_id, friend_id)
+        now = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(self.path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute("SELECT * FROM friendships WHERE user_id = ? AND friend_id = ?", (first, second))
+            existing = await cursor.fetchone()
+            if existing:
+                return dict(existing)
+            await db.execute(
+                "INSERT OR IGNORE INTO friendships (user_id, friend_id, requested_by, status, created_at, updated_at) VALUES (?, ?, ?, 'pending', ?, ?)",
+                (first, second, user_id, now, now),
+            )
+            cursor = await db.execute("SELECT * FROM friendships WHERE user_id = ? AND friend_id = ?", (first, second))
+            created = await cursor.fetchone()
+            await db.commit()
+        return dict(created)
+
+    async def accept_friend_request(self, request_id: int, user_id: int) -> bool:
+        now = datetime.now(timezone.utc).isoformat()
+        async with aiosqlite.connect(self.path) as db:
+            cursor = await db.execute(
+                "UPDATE friendships SET status = 'accepted', updated_at = ? WHERE id = ? AND (user_id = ? OR friend_id = ?) AND requested_by != ? AND status = 'pending'",
+                (now, request_id, user_id, user_id, user_id),
+            )
+            await db.commit()
+        return cursor.rowcount == 1
+
+    async def delete_friend_request(self, request_id: int, user_id: int) -> bool:
+        async with aiosqlite.connect(self.path) as db:
+            cursor = await db.execute(
+                "DELETE FROM friendships WHERE id = ? AND (user_id = ? OR friend_id = ?) AND status = 'pending'",
+                (request_id, user_id, user_id),
+            )
+            await db.commit()
+        return cursor.rowcount == 1
+
+    async def remove_friend(self, user_id: int, friend_id: int) -> bool:
+        first, second = self._friend_pair(user_id, friend_id)
+        async with aiosqlite.connect(self.path) as db:
+            cursor = await db.execute("DELETE FROM friendships WHERE user_id = ? AND friend_id = ? AND status = 'accepted'", (first, second))
+            await db.commit()
+        return cursor.rowcount == 1
+
     async def delete_profile(self, user_id: int) -> None:
         async with aiosqlite.connect(self.path) as db:
             await db.execute("DELETE FROM student_profiles WHERE user_id = ?", (user_id,))
-            await db.commit()
-
-    async def delete_user(self, user_id: int) -> None:
-        async with aiosqlite.connect(self.path) as db:
-            await db.execute("DELETE FROM notifications WHERE user_id = ?", (user_id,))
-            await db.execute("DELETE FROM pending_verifications WHERE user_id = ?", (user_id,))
-            await db.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
-            await db.execute("DELETE FROM account_credentials WHERE user_id = ?", (user_id,))
-            await db.execute("DELETE FROM student_profiles WHERE user_id = ?", (user_id,))
-            await db.execute("DELETE FROM users WHERE id = ?", (user_id,))
             await db.commit()

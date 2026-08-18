@@ -15,11 +15,10 @@ from .config import get_settings
 from .db import Database
 from .models import (
     ConfirmVerificationRequest,
+    FriendRequestCreate,
     LoginRequest,
     LogoutRequest,
     NotificationRequest,
-    PasswordChangeRequest,
-    PasswordResetRequest,
     RegisterRequest,
     StudentVerificationRequest,
     TelegramAuthRequest,
@@ -72,6 +71,19 @@ def public_profile(profile: dict | None) -> dict | None:
     return {key: value for key, value in profile.items() if key not in {"personal_number_hash", "password_hash", "user_id", "id"}}
 
 
+def public_friend(profile: dict) -> dict:
+    return {
+        "userId": profile["user_id"],
+        "name": profile.get("name", ""),
+        "faculty_name": profile.get("faculty_name", ""),
+        "speciality_name": profile.get("speciality_name", ""),
+        "course": profile.get("course"),
+        "group_number": profile.get("group_number", ""),
+        "subgroup": profile.get("subgroup"),
+        "student_status": profile.get("student_status", "active"),
+    }
+
+
 def session_expiry(remember_me: bool) -> datetime:
     duration = timedelta(days=settings.session_remember_days) if remember_me else timedelta(minutes=settings.session_short_minutes)
     return datetime.now(timezone.utc) + duration
@@ -96,6 +108,29 @@ def profile_data_from_candidate(candidate: dict) -> dict:
 
 def generic_auth_error() -> HTTPException:
     return HTTPException(401, "Неверный личный номер или пароль")
+
+
+def development_telegram_user(init_data: str):
+    """Return one of three local-only identities used for friend-flow testing."""
+    suffixes = {"dev-test-init-data": 1, "dev-test-init-data-2": 2, "dev-test-init-data-3": 3}
+    test_user = suffixes.get(init_data)
+    if test_user is None:
+        return None
+    return type(
+        "DevTelegramUser",
+        (),
+        {
+            "telegram_id": settings.dev_telegram_id + test_user - 1,
+            "username": f"bsuir_test_user_{test_user}",
+            "first_name": "Тестовый" if test_user == 1 else f"Тестовый Друг {test_user - 1}",
+            "last_name": "Студент",
+        },
+    )()
+
+
+def is_local_dev_request(request: Request) -> bool:
+    host = request.headers.get("host", "").split(":", 1)[0].strip("[]").lower()
+    return host in {"localhost", "127.0.0.1", "::1"}
 
 
 async def resolve_session(authorization: str | None, session_cookie: str | None) -> dict:
@@ -183,13 +218,11 @@ async def telegram_auth(
     try:
         tg_user = validate_telegram_init_data(payload.init_data, settings.bot_token, settings.telegram_init_data_max_age)
     except ValueError as exc:
-        if not settings.dev_auth_enabled or payload.init_data != "dev-test-init-data":
+        if not settings.dev_auth_enabled or not is_local_dev_request(request):
             raise HTTPException(401, str(exc)) from exc
-        tg_user = type(
-            "DevTelegramUser",
-            (),
-            {"telegram_id": settings.dev_telegram_id, "username": "bsuir_test_user", "first_name": "Тестовый", "last_name": "Студент"},
-        )()
+        tg_user = development_telegram_user(payload.init_data)
+        if tg_user is None:
+            raise HTTPException(401, str(exc)) from exc
     user_id = await db.upsert_user(tg_user.telegram_id, tg_user.username, tg_user.first_name)
     credentials = await db.get_credentials(user_id)
     existing_session = None
@@ -308,41 +341,6 @@ async def logout(
     return {"loggedOut": True, "allDevices": payload.all_devices}
 
 
-@app.post("/api/account/password/change")
-async def change_password(payload: PasswordChangeRequest, request: Request, response: Response, session: dict = Depends(current_session)) -> dict:
-    user_id = int(session["user_id"])
-    credentials = await db.get_credentials(user_id)
-    if not credentials or not verify_password(payload.current_password, credentials["password_hash"]):
-        raise generic_auth_error()
-    if payload.new_password != payload.password_confirmation:
-        raise HTTPException(400, "Пароли не совпадают")
-    password_error = validate_password(payload.new_password, "")
-    if password_error:
-        raise HTTPException(400, password_error)
-    await db.update_password(user_id, hash_password(payload.new_password))
-    await db.delete_user_sessions(user_id)
-    token = await issue_session(user_id, bool(session.get("remember_me")), response, request)
-    return {"changed": True, "accessToken": token}
-
-
-@app.post("/api/account/password/reset")
-async def reset_password(payload: PasswordResetRequest, request: Request, response: Response, session: dict = Depends(current_session)) -> dict:
-    user_id = int(session["user_id"])
-    if payload.new_password != payload.password_confirmation:
-        raise HTTPException(400, "Пароли не совпадают")
-    password_error = validate_password(payload.new_password, normalize_personal_number(payload.personal_number))
-    if password_error:
-        raise HTTPException(400, password_error)
-    credentials = await db.get_credentials(user_id)
-    number_hash = hash_personal_number(normalize_personal_number(payload.personal_number), settings.student_registry_pepper)
-    if not credentials or credentials["personal_number_hash"] != number_hash:
-        raise generic_auth_error()
-    await db.update_password(user_id, hash_password(payload.new_password))
-    await db.delete_user_sessions(user_id)
-    token = await issue_session(user_id, bool(session.get("remember_me")), response, request)
-    return {"reset": True, "accessToken": token}
-
-
 @app.post("/api/app/student/verify")
 async def verify_student(payload: StudentVerificationRequest, user_id: int = Depends(current_user)) -> dict:
     now = datetime.now(timezone.utc)
@@ -382,11 +380,92 @@ async def delete_student_profile(user_id: int = Depends(current_user)) -> dict:
     return {"deleted": True}
 
 
-@app.delete("/api/account")
-async def delete_account(response: Response, user_id: int = Depends(current_user)) -> dict:
-    await db.delete_user(user_id)
-    clear_session_cookie(response)
-    return {"deleted": True}
+@app.get("/api/app/friends")
+async def friends(user_id: int = Depends(current_user)) -> dict:
+    await profile_or_403(user_id)
+    return await db.list_friendships(user_id)
+
+
+def friend_relationship(friendship: dict | None, user_id: int) -> tuple[str | None, int | None]:
+    if not friendship:
+        return None, None
+    if friendship["status"] == "accepted":
+        return "accepted", friendship["id"]
+    return ("outgoing" if friendship["requested_by"] == user_id else "incoming"), friendship["id"]
+
+
+@app.get("/api/app/friends/search")
+async def search_friends(
+    q: str = Query(min_length=2, max_length=120),
+    user_id: int = Depends(current_user),
+) -> dict:
+    await profile_or_403(user_id)
+    query = q.strip()
+    if not query:
+        raise HTTPException(400, "Введите студенческий номер или ФИО")
+
+    matches: list[dict] = []
+    normalized = normalize_personal_number(query)
+    if len(normalized) >= 4 and normalized.isdigit():
+        candidate_result = await verify_candidate(query)
+        if candidate_result:
+            _, candidate = candidate_result
+            profile = await db.get_profile_by_personal_hash(candidate["personal_number_hash"])
+            if profile and int(profile["user_id"]) != user_id:
+                matches.append(profile)
+    else:
+        matches = await db.search_profiles(query, user_id)
+
+    items = []
+    for profile in matches:
+        student_id = int(profile["user_id"])
+        relationship, request_id = friend_relationship(await db.get_friendship(user_id, student_id), user_id)
+        item = public_friend(profile)
+        item["relationship"] = relationship
+        if request_id is not None:
+            item["requestId"] = request_id
+        items.append(item)
+    return {"items": items}
+
+
+@app.post("/api/app/friends/requests")
+async def create_friend_request(payload: FriendRequestCreate, user_id: int = Depends(current_user)) -> dict:
+    await profile_or_403(user_id)
+    if payload.user_id == user_id:
+        raise HTTPException(400, "Нельзя добавить самого себя")
+    target = await db.get_profile(payload.user_id)
+    if not target or target.get("student_status") != "active":
+        raise HTTPException(404, "Профиль студента не найден")
+    existing = await db.get_friendship(user_id, payload.user_id)
+    if existing:
+        if existing["status"] == "accepted":
+            raise HTTPException(409, "Этот студент уже в списке друзей")
+        if existing["requested_by"] == user_id:
+            raise HTTPException(409, "Заявка уже отправлена")
+        raise HTTPException(409, "У вас уже есть входящая заявка от этого студента")
+    request_row = await db.create_friend_request(user_id, payload.user_id)
+    return {"created": True, "requestId": request_row["id"]}
+
+
+@app.post("/api/app/friends/requests/{request_id}/accept")
+async def accept_friend_request(request_id: int, user_id: int = Depends(current_user)) -> dict:
+    if not await db.accept_friend_request(request_id, user_id):
+        raise HTTPException(404, "Входящая заявка не найдена или уже обработана")
+    return {"accepted": True, "requestId": request_id}
+
+
+@app.delete("/api/app/friends/requests/{request_id}")
+async def delete_friend_request(request_id: int, user_id: int = Depends(current_user)) -> dict:
+    if not await db.delete_friend_request(request_id, user_id):
+        raise HTTPException(404, "Заявка не найдена или уже обработана")
+    return {"deleted": True, "requestId": request_id}
+
+
+@app.delete("/api/app/friends/{student_id}")
+async def remove_friend(student_id: int, user_id: int = Depends(current_user)) -> dict:
+    if student_id == user_id or not await db.remove_friend(user_id, student_id):
+        raise HTTPException(404, "Студент не найден среди друзей")
+    return {"removed": True, "userId": student_id}
 
 
 async def profile_or_403(user_id: int) -> dict:

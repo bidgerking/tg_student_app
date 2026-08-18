@@ -11,7 +11,7 @@
 
   tg?.ready();
   tg?.expand();
-  tg?.setHeaderColor?.("#003366");
+  tg?.setHeaderColor?.("#943A02");
   tg?.setBackgroundColor?.("#F2F4F7");
 
   function show(screenId) {

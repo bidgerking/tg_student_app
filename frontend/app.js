@@ -1,7 +1,7 @@
 (() => {
   "use strict";
   const tg = window.Telegram?.WebApp;
-  tg?.ready(); tg?.expand(); tg?.setHeaderColor?.("#003366"); tg?.setBackgroundColor?.("#F2F4F7");
+  tg?.ready(); tg?.expand(); tg?.setHeaderColor?.("#943A02"); tg?.setBackgroundColor?.("#F2F4F7");
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const configuredApiBase = window.__BSUIR_API_BASE__ || document.querySelector('meta[name="bsuir-api-base"]')?.content || "";

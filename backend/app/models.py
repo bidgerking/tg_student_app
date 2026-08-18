@@ -22,18 +22,6 @@ class LoginRequest(BaseModel):
     remember_me: bool = Field(default=False, alias="rememberMe")
 
 
-class PasswordChangeRequest(BaseModel):
-    current_password: str = Field(alias="currentPassword", min_length=1, max_length=256)
-    new_password: str = Field(alias="newPassword", min_length=1, max_length=256)
-    password_confirmation: str = Field(alias="passwordConfirmation", min_length=1, max_length=256)
-
-
-class PasswordResetRequest(BaseModel):
-    personal_number: str = Field(alias="personalNumber", min_length=4, max_length=64)
-    new_password: str = Field(alias="newPassword", min_length=1, max_length=256)
-    password_confirmation: str = Field(alias="passwordConfirmation", min_length=1, max_length=256)
-
-
 class LogoutRequest(BaseModel):
     all_devices: bool = Field(default=False, alias="allDevices")
 
@@ -55,6 +43,10 @@ class ConfirmVerificationRequest(BaseModel):
 
 class NotificationRequest(BaseModel):
     type: str = Field(default="schedule_changes", min_length=1, max_length=64)
+
+
+class FriendRequestCreate(BaseModel):
+    user_id: int = Field(alias="userId", gt=0)
 
 
 class ScheduleItem(BaseModel):
