@@ -208,6 +208,10 @@
     state.view = view;
     $$(".tab").forEach((tab) => tab.classList.toggle("is-active", tab.dataset.view === view));
     $$(".menu-item").forEach((item) => item.classList.toggle("is-active", item.dataset.menuView === view));
+    const isStandaloneView = view === "profile" || view === "friends";
+    $(".dashboard-head").classList.toggle("hidden", isStandaloneView);
+    $("#profileSummary").classList.toggle("hidden", isStandaloneView);
+    $(".view-tabs").classList.toggle("hidden", isStandaloneView);
     $("#scheduleView").classList.toggle("hidden", view === "profile" || view === "friends");
     $("#profileView").classList.toggle("hidden", view !== "profile");
     $("#friendsView").classList.toggle("hidden", view !== "friends");

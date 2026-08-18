@@ -6,16 +6,16 @@
     <meta name="theme-color" content="#943A02" />
     <meta name="bsuir-api-base" content="" />
     <title>BSUIR Student</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=20260818-3" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="runtime-config.js"></script>
-    <script src="app-v3.js?v=20260818-2" defer></script>
+    <script src="app-v3.js?v=20260818-3" defer></script>
   </head>
   <body>
     <div class="app-shell">
       <header class="topbar">
         <button id="menuButton" class="brand brand-button" type="button" aria-expanded="false" aria-controls="appMenu">
-          <span class="brand-mark">BS</span><span>BSUIR STUDENT</span><span class="menu-caret" aria-hidden="true">⌄</span>
+          <span class="brand-mark">BS</span><span>BSUIR STUDENT</span><span class="menu-caret" aria-hidden="true">→</span>
         </button>
         <div class="topbar-right"><span class="status-dot"></span><span id="connectionText">Подключение</span><button id="profileTopButton" class="top-icon" type="button">◎</button></div>
       </header>
@@ -48,7 +48,7 @@
           <h1>Регистрация<br /><em>студента.</em></h1>
           <form id="registerForm" class="verify-card">
             <label for="registerPersonalNumber">Личный номер студента</label>
-            <div class="input-wrap"><span>#</span><input id="registerPersonalNumber" inputmode="numeric" autocomplete="off" required /></div>
+            <div class="input-wrap number-input-wrap"><span>#</span><input id="registerPersonalNumber" inputmode="numeric" autocomplete="off" required /></div>
             <label for="registerPassword">Пароль</label>
             <div class="input-wrap"><input id="registerPassword" type="password" autocomplete="new-password" required /></div>
             <label for="registerPasswordConfirmation">Повторите пароль</label>
@@ -65,7 +65,7 @@
           <h1>С возвращением<br /><em>в кабинет.</em></h1>
           <form id="loginForm" class="verify-card">
             <label for="loginPersonalNumber">Личный номер студента</label>
-            <div class="input-wrap"><span>#</span><input id="loginPersonalNumber" inputmode="numeric" autocomplete="username" required /></div>
+            <div class="input-wrap number-input-wrap"><span>#</span><input id="loginPersonalNumber" inputmode="numeric" autocomplete="username" required /></div>
             <label for="loginPassword">Пароль</label>
             <div class="input-wrap"><input id="loginPassword" type="password" autocomplete="current-password" required /></div>
             <label class="remember-row"><input id="rememberMe" type="checkbox" /> <span>Запомнить вход на этом устройстве</span></label>
@@ -98,7 +98,7 @@
         <section id="dashboardScreen" class="screen dashboard-screen hidden">
           <div class="dashboard-head"><div><div class="section-label">BSUIR · Личный кабинет</div><h1>Добрый день, <span id="studentFirstName">студент</span></h1><p id="dashboardDate" class="muted"></p></div><button id="refreshButton" class="refresh-button" type="button">↻</button></div>
           <div id="profileSummary" class="profile-summary"></div>
-          <nav class="view-tabs" aria-label="Разделы расписания"><button class="tab is-active" data-view="today" type="button">Сегодня</button><button class="tab" data-view="tomorrow" type="button">Завтра</button><button class="tab" data-view="week" type="button">Неделя</button><button class="tab" data-view="exams" type="button">Экзамены</button><button class="tab" data-view="profile" type="button">Профиль</button></nav>
+          <nav class="view-tabs" aria-label="Разделы расписания"><button class="tab is-active" data-view="today" type="button">Сегодня</button><button class="tab" data-view="tomorrow" type="button">Завтра</button><button class="tab" data-view="week" type="button">Неделя</button><button class="tab" data-view="exams" type="button">Экзамены</button></nav>
           <div id="scheduleView" class="view-panel"></div>
           <div id="profileView" class="view-panel hidden"></div>
           <div id="friendsView" class="view-panel hidden"></div>
