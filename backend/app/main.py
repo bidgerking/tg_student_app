@@ -391,6 +391,20 @@ async def friends(user_id: int = Depends(current_user)) -> dict:
     return await db.list_friendships(user_id)
 
 
+@app.get("/api/app/friends/{student_id}/profile")
+async def friend_profile(student_id: int, user_id: int = Depends(current_user)) -> dict:
+    await profile_or_403(user_id)
+    if student_id == user_id:
+        raise HTTPException(400, "Используйте раздел собственного профиля")
+    friendship = await db.get_friendship(user_id, student_id)
+    if not friendship or friendship["status"] != "accepted":
+        raise HTTPException(403, "Профиль доступен только подтверждённым друзьям")
+    profile = await db.get_profile(student_id)
+    if not profile or profile.get("student_status") != "active":
+        raise HTTPException(404, "Профиль друга не найден")
+    return {"profile": public_friend(profile)}
+
+
 def friend_relationship(friendship: dict | None, user_id: int) -> tuple[str | None, int | None]:
     if not friendship:
         return None, None

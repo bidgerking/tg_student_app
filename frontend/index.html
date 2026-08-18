@@ -6,10 +6,10 @@
     <meta name="theme-color" content="#943A02" />
     <meta name="bsuir-api-base" content="" />
     <title>BSUIR Student</title>
-    <link rel="stylesheet" href="styles.css?v=20260818-4" />
+    <link rel="stylesheet" href="styles.css?v=20260818-5" />
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script src="runtime-config.js"></script>
-    <script src="app-v3.js?v=20260818-4" defer></script>
+    <script src="app-v3.js?v=20260818-5" defer></script>
   </head>
   <body>
     <div class="app-shell">
@@ -99,6 +99,7 @@
           <div class="dashboard-head"><div><div class="section-label">BSUIR · Личный кабинет</div><h1>Добрый день, <span id="studentFirstName">студент</span></h1><p id="dashboardDate" class="muted"></p></div><button id="refreshButton" class="refresh-button" type="button">↻</button></div>
           <div id="profileSummary" class="profile-summary"></div>
           <nav class="view-tabs" aria-label="Разделы расписания"><button class="tab is-active" data-view="today" type="button">Сегодня</button><button class="tab" data-view="tomorrow" type="button">Завтра</button><button class="tab" data-view="week" type="button">Неделя</button><button class="tab" data-view="exams" type="button">Экзамены</button></nav>
+          <div id="scheduleDateControl" class="schedule-date-control"></div>
           <div id="scheduleView" class="view-panel"></div>
           <div id="profileView" class="view-panel hidden"></div>
           <div id="friendsView" class="view-panel hidden"></div>
