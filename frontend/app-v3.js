@@ -327,7 +327,7 @@
     $("#scheduleView").innerHTML = '<div class="empty-state">Загружаем расписание…</div>';
     try {
       if (view === "week") {
-        const data = await api("/api/app/schedule/week");
+        const data = await api(`/api/app/schedule/week?date=${state.selectedDate}`);
         $("#scheduleView").innerHTML = data.days.map((day) => `<div class="week-day"><div class="day-heading"><h2>${formatDate(day.date)}</h2></div>${day.items.length ? `<div class="schedule-list">${day.items.map(lessonCard).join("")}</div>` : '<div class="empty-state">Нет занятий</div>'}</div>`).join("");
       } else if (view === "exams") {
         renderSchedule({ date: localDate(), items: (await api("/api/app/exams")).items, weekNumber: null });

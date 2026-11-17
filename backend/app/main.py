@@ -516,8 +516,12 @@ async def schedule_by_date(target: date, user_id: int) -> dict:
 
 @app.get("/api/schedule/week")
 @app.get("/api/app/schedule/week")
-async def schedule_week(user_id: int = Depends(current_user)) -> dict:
-    monday = date.today() - timedelta(days=date.today().weekday())
+async def schedule_week(
+    date_value: date | None = Query(default=None, alias="date"),
+    user_id: int = Depends(current_user),
+) -> dict:
+    anchor = date_value or date.today()
+    monday = anchor - timedelta(days=anchor.weekday())
     days = []
     for offset in range(7):
         try:

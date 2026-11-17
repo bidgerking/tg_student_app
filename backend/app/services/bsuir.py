@@ -102,9 +102,18 @@ class BsuirScheduleClient:
         except (httpx.HTTPError, ValueError, TypeError):
             return None
 
+    @staticmethod
+    def week_number_for_date(payload: dict[str, Any], target: date) -> int | None:
+        """Calculate the academic week for the requested date, not for today."""
+        start = parse_bsuir_date(payload.get("startDate"))
+        end = parse_bsuir_date(payload.get("endDate"))
+        if not start or target < start or (end and target > end):
+            return None
+        return ((target - start).days // 7) + 1
+
     async def schedule_for_date(self, group: str, target: date, subgroup: int | None) -> dict[str, Any]:
         payload, source, stale = await self.fetch_group_schedule(group)
-        week_number = await self.current_week()
+        week_number = self.week_number_for_date(payload, target)
         day_entries = payload.get("schedules", {}).get(DAY_NAMES[target.weekday()], [])
         items = []
         for entry in day_entries:
@@ -128,6 +137,12 @@ class BsuirScheduleClient:
         if end and target > end:
             return False
         weeks = entry.get("weekNumber") or []
+        if isinstance(weeks, (int, str)):
+            weeks = [weeks]
+        try:
+            weeks = {int(value) for value in weeks}
+        except (TypeError, ValueError):
+            weeks = set()
         if week_number is not None and weeks and week_number not in weeks and not exact:
             return False
         entry_subgroup = entry.get("numSubgroup") or 0
