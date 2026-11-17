@@ -5,7 +5,11 @@
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   const configuredApiBase = window.__BSUIR_API_BASE__ || document.querySelector('meta[name="bsuir-api-base"]')?.content || "";
-  const apiBase = configuredApiBase.replace(/\/$/, "") || (location.protocol === "file:" ? "http://127.0.0.1:8000" : "");
+  const apiBase = configuredApiBase.replace(/\/+$/, "") || (
+  location.protocol === "file:"
+    ? "http://127.0.0.1:8000"
+    : "https://tg-student-backend-6zgh.onrender.com"
+  );
   const state = { token: null, profile: null, hasAccount: false, registrationToken: null, view: "today", friends: null, selectedDate: localDate(), calendarMonth: null };
   const screens = ["authChoiceScreen", "registerScreen", "loginScreen", "verificationScreen", "confirmScreen", "dashboardScreen"];
 
